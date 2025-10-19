@@ -1,0 +1,71 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Show Python and PyInstaller versions
+        run: |
+          python --version
+          pyinstaller --version
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name rename2date rename2date.py
+
+      - name: Upload artifact (EXE)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rename2date-${{ github.ref_name }}-windows
+          path: dist/rename2date.exe
+          if-no-files-found: error
+
+      - name: Create GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/rename2date.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish/Update Latest Release (non-tag builds)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          body: |
+            Automated latest build from ref ${{ github.ref_name }} (commit ${{ github.sha }}).
+            This release is overwritten on each successful non-tag build.
+          files: dist/rename2date.exe
+          make_latest: true
+          overwrite: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
